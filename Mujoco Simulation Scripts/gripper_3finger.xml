@@ -1,0 +1,572 @@
+<mujoco model="3finger_compliant_gripper">
+  <!--
+    3-Finger Compliant Gripper - MuJoCo Model  v9d
+    ===============================================
+    v9d fix: Improved contact coverage for small cylindrical objects.
+      - condim 4→6: enables torsional + rolling friction so objects
+        can't twist/rotate out of grip.
+      - Lip spheres: 1mm→2mm radius, protrude further for conformity.
+      - Added CENTER lip spheres (lip_c, lip_d) at x=0.0225 on each
+        link.  Old lips only at tip (x=0.033) left mid-segment gaps
+        where flat box face couldn't reach curved objects.  Now 4 lip
+        spheres per link = full coverage for cylinders down to ~10mm Ø.
+    v9c (retained): noslip_iterations=4, Newton solver, elliptic cone.
+    v9b (retained): solref=0.012, solimp=[0.82,0.95,0.008], damp=0.018.
+    v9 (retained): splay, TPU friction 2.8, extended closure.
+  -->
+
+  <compiler angle="radian" autolimits="true"/>
+
+  <option gravity="0 0 -9.81" timestep="0.0005" integrator="implicit"
+          solver="Newton" iterations="200" cone="elliptic"
+          noslip_iterations="4" noslip_tolerance="1e-6">
+    <flag warmstart="enable"/>
+  </option>
+
+  <visual>
+    <headlight ambient="0.45 0.45 0.45" diffuse="0.6 0.6 0.6"/>
+    <rgba haze="1.0 1.0 1.0 1"/>
+    <quality shadowsize="2048"/>
+    <map znear="0.001"/>
+  </visual>
+
+
+  <default>
+    <!--
+      Finger contact compliance — tuned for tendon-driven wrapping.
+
+      solref[0] = time-constant τ (s): contact force ∝ penetration/τ².
+        For underactuated wrapping: contact must be STIFF enough to block
+        each joint on object contact, redirecting tendon travel to distal
+        joints.  0.012 s (was 0.045): firm TPU-on-object contact.
+        Too soft → fingers push through; too stiff → bouncing.
+
+      solimp = [dmin, dmax, width, mid, power]
+        dmax=0.95: high impedance at depth → joint stops decisively.
+        width=0.008: narrow soft→stiff ramp → rapid force build-up.
+
+      margin=0.003: early contact detection (unchanged).
+      damping=0.018: slightly higher joint damping for stable wrapping.
+    -->
+    <default class="finger_link">
+      <geom type="box" density="1100" friction="2.8 0.8 0.02"
+            rgba="0.88 0.55 0.10 1" contype="1" conaffinity="1"
+            condim="6" solref="0.012 1.0" solimp="0.82 0.95 0.008"
+            margin="0.003"/>
+    </default>
+    <default class="finger_joint_geom">
+      <geom type="box" density="1100" contype="1" conaffinity="1"
+            condim="6" friction="2.8 0.8 0.02"
+            solref="0.012 1.0" solimp="0.82 0.95 0.008"
+            margin="0.003"/>
+    </default>
+    <default class="palm_link">
+      <geom type="box" density="1300" friction="2.8 0.8 0.02"
+            rgba="0.82 0.50 0.12 1" contype="1" conaffinity="1"
+            condim="6" solref="0.012 1.0" solimp="0.82 0.95 0.008"
+            margin="0.003"/>
+    </default>
+    <default class="finger_joint">
+      <joint type="hinge" damping="0.018" armature="1e-5"
+             limited="true" range="0 3.14"/>
+    </default>
+    <!-- Lip spheres: 2mm radius, 4 per link (tip + center × ±Z).
+         Simulate TPU conforming around curved objects.
+         condim=6 for full torsional/rolling friction. -->
+    <default class="finger_lip">
+      <geom type="sphere" density="0" contype="1" conaffinity="1"
+            condim="6" friction="2.8 0.8 0.02"
+            solref="0.016 1.0" solimp="0.78 0.92 0.010"
+            rgba="0.88 0.55 0.10 0" margin="0.003"/>
+    </default>
+  </default>
+
+  <asset>
+
+    <texture name="white_sky" type="skybox" builtin="gradient" 
+             rgb1="1 1 1" rgb2="1 1 1" width="512" height="512"/>
+    
+    <material name="white_floor" rgba="1 1 1 1" shininess="0" specular="0"/>
+
+    <texture name="grid" type="2d" builtin="checker"
+             rgb1="0.92 0.92 0.92" rgb2="0.82 0.82 0.82"
+             width="256" height="256"/>
+    <material name="grid_mat" texture="grid" texrepeat="8 8"
+              reflectance="0.1"/>
+    <material name="body_mat" rgba="0.78 0.78 0.80 1"/>
+    <material name="body_base_mat" rgba="0.62 0.62 0.64 1"/>
+    <material name="joint1_mat" rgba="0.55 0.30 0.05 1"/>
+    <material name="joint2_mat" rgba="0.62 0.36 0.08 1"/>
+    <material name="joint3_mat" rgba="0.70 0.42 0.10 1"/>
+    <material name="object_mat" rgba="0.30 0.70 0.35 0.85" specular="0.3"/>
+    <material name="object2_mat" rgba="0.25 0.45 0.80 0.85" specular="0.3"/>
+    <material name="object3_mat" rgba="0.80 0.30 0.30 0.85" specular="0.3"/>
+    <material name="paper_towel_mat" rgba="0.95 0.93 0.88 1.0" specular="0.05"/>
+    <!-- Paint tube (Liquitex Basics): dark body + light cap + teal label band -->
+    <material name="paint_tube_mat"     rgba="0.10 0.10 0.10 1.0" specular="0.15"/>
+    <material name="paint_tube_label_mat" rgba="0.10 0.55 0.55 1.0" specular="0.20"/>
+    <material name="paint_tube_cap_mat" rgba="0.88 0.88 0.88 1.0" specular="0.40"/>
+    <!-- Screwdriver: red rubber handle + silver steel shaft -->
+    <material name="screwdriver_handle_mat" rgba="0.80 0.18 0.18 1.0" specular="0.10"/>
+    <material name="screwdriver_shaft_mat"  rgba="0.80 0.80 0.82 1.0" specular="0.60"/>
+    <!-- Tape roll (packing tape): amber body + cardboard core -->
+    <material name="tape_roll_mat"  rgba="0.78 0.66 0.29 1.0" specular="0.25"/>
+    <material name="tape_core_mat"  rgba="0.54 0.44 0.25 1.0" specular="0.10"/>
+  </asset>
+
+  <worldbody>
+
+
+    <geom name="floor" type="plane" size="0.5 0.5 0.01" material="grid_mat"
+          contype="1" conaffinity="1"/>
+    <light pos="0 0 0.8" dir="0 0 -1" diffuse="0.7 0.7 0.7" castshadow="true"/>
+    <light pos="0.4 0.4 0.6" dir="-0.3 -0.3 -0.5" diffuse="0.4 0.4 0.4"/>
+
+    <!-- === GRIPPER ASSEMBLY  (base at z=0.144, rod_base bottom flush with floor) === -->
+    <body name="gripper_base" pos="0 0 0.144">
+
+      <geom name="body_main" type="box" size="0.026 0.022 0.018"
+            pos="0 0 -0.030" material="body_mat"
+            contype="0" conaffinity="0"/>
+      <geom name="body_plate" type="box" size="0.033 0.030 0.005"
+            pos="0 0 -0.053" material="body_base_mat"
+            contype="0" conaffinity="0"/>
+      <geom name="rod" type="cylinder" size="0.006 0.04"
+            pos="0 0 -0.098" rgba="0.5 0.5 0.52 1"
+            contype="0" conaffinity="0"/>
+      <geom name="rod_base" type="cylinder" size="0.018 0.003"
+            pos="0 0 -0.141" rgba="0.45 0.45 0.47 1"
+            contype="0" conaffinity="0"/>
+
+      <!-- == FINGER A  (parallel, X=-14mm, extends -Y) ==
+           Semi-hollow TPU: stiffness = 0.45 x solid
+           k0=k1=k2=0.05750  k3=0.07182  N*m/rad
+           5 bodies: palm (rigid) → link0 (j0, no sensor) → link1..3 (j1..j3, sensors)
+      -->
+      <body name="A_palm" pos="-0.014 0.012 0" euler="0 0 -1.5708">
+        <joint name="A_splay" type="hinge" axis="0 0 -1"
+               limited="true" range="0 0.5236"
+               damping="0.05" stiffness="0.5" armature="1e-4"/>
+        <geom name="A_palm_geom" class="palm_link"
+              size="0.0125 0.005 0.0075" pos="0.0125 0 0"/>
+        <!-- link0: cable-driven proximal segment — NO flex sensor on hardware -->
+        <body name="A_link0" pos="0.025 0 0">
+          <joint name="A_j0" class="finger_joint" axis="0 -1 0"
+                 stiffness="0.05750"/>
+          <geom name="A_j0_geom" class="finger_joint_geom" material="joint1_mat"
+                size="0.0075 0.005 0.001625" pos="0.0075 0 0"/>
+          <geom name="A_l0_geom" class="finger_link"
+                size="0.0125 0.005 0.006" pos="0.0275 0 0"/>
+          <geom name="A_l0_lip_a" class="finger_lip" pos="0.033 0 0.007" size="0.002"/>
+          <geom name="A_l0_lip_b" class="finger_lip" pos="0.033 0 -0.007" size="0.002"/>
+          <geom name="A_l0_lip_c" class="finger_lip" pos="0.0225 0 0.007" size="0.002"/>
+          <geom name="A_l0_lip_d" class="finger_lip" pos="0.0225 0 -0.007" size="0.002"/>
+        <body name="A_link1" pos="0.040 0 0">
+          <joint name="A_j1" class="finger_joint" axis="0 -1 0"
+                 stiffness="0.05750"/>
+          <geom name="A_j1_geom" class="finger_joint_geom" material="joint1_mat"
+                size="0.0075 0.005 0.001625" pos="0.0075 0 0"/>
+          <geom name="A_l1_geom" class="finger_link"
+                size="0.0125 0.005 0.006" pos="0.0275 0 0"/>
+          <geom name="A_l1_lip_a" class="finger_lip" pos="0.033 0 0.007" size="0.002"/>
+          <geom name="A_l1_lip_b" class="finger_lip" pos="0.033 0 -0.007" size="0.002"/>
+          <geom name="A_l1_lip_c" class="finger_lip" pos="0.0225 0 0.007" size="0.002"/>
+          <geom name="A_l1_lip_d" class="finger_lip" pos="0.0225 0 -0.007" size="0.002"/>
+          <site name="A_force1" pos="0.0275 0 0.012" size="0.008" rgba="1 0 0 0"/>
+          <body name="A_link2" pos="0.040 0 0">
+            <joint name="A_j2" class="finger_joint" axis="0 -1 0"
+                   stiffness="0.05750"/>
+            <geom name="A_j2_geom" class="finger_joint_geom" material="joint2_mat"
+                  size="0.0075 0.005 0.001625" pos="0.0075 0 0"/>
+            <geom name="A_l2_geom" class="finger_link"
+                  size="0.0125 0.005 0.006" pos="0.0275 0 0"/>
+            <geom name="A_l2_lip_a" class="finger_lip" pos="0.033 0 0.007" size="0.002"/>
+            <geom name="A_l2_lip_b" class="finger_lip" pos="0.033 0 -0.007" size="0.002"/>
+          <geom name="A_l2_lip_c" class="finger_lip" pos="0.0225 0 0.007" size="0.002"/>
+          <geom name="A_l2_lip_d" class="finger_lip" pos="0.0225 0 -0.007" size="0.002"/>
+            <site name="A_force2" pos="0.0275 0 0.012" size="0.008" rgba="1 0 0 0"/>
+            <body name="A_link3" pos="0.040 0 0">
+              <joint name="A_j3" class="finger_joint" axis="0 -1 0"
+                     stiffness="0.07182"/>
+              <geom name="A_j3_geom" class="finger_joint_geom" material="joint3_mat"
+                    size="0.0075 0.005 0.00175" pos="0.0075 0 0"/>
+              <geom name="A_l3_geom" class="finger_link"
+                    size="0.0125 0.005 0.006" pos="0.0275 0 0"/>
+              <geom name="A_l3_lip_a" class="finger_lip" pos="0.033 0 0.007" size="0.002"/>
+              <geom name="A_l3_lip_b" class="finger_lip" pos="0.033 0 -0.007" size="0.002"/>
+          <geom name="A_l3_lip_c" class="finger_lip" pos="0.0225 0 0.007" size="0.002"/>
+          <geom name="A_l3_lip_d" class="finger_lip" pos="0.0225 0 -0.007" size="0.002"/>
+              <site name="A_force3" pos="0.0275 0 0.012" size="0.008" rgba="1 0 0 0"/>
+              <site name="A_tip" pos="0.040 0 0" size="0.003" rgba="0.95 0.25 0.2 1"/>
+            </body>  <!-- /A_link3 -->
+          </body>    <!-- /A_link2 -->
+        </body>      <!-- /A_link1 -->
+        </body>      <!-- /A_link0 -->
+      </body>        <!-- /A_palm -->
+
+      <!-- == FINGER B  (parallel, X=+14mm, extends -Y) == -->
+      <body name="B_palm" pos="0.014 0.012 0" euler="0 0 -1.5708">
+        <joint name="B_splay" type="hinge" axis="0 0 1"
+               limited="true" range="0 0.5236"
+               damping="0.05" stiffness="0.5" armature="1e-4"/>
+        <geom name="B_palm_geom" class="palm_link"
+              size="0.0125 0.005 0.0075" pos="0.0125 0 0"/>
+        <!-- link0: cable-driven proximal segment — NO flex sensor on hardware -->
+        <body name="B_link0" pos="0.025 0 0">
+          <joint name="B_j0" class="finger_joint" axis="0 -1 0"
+                 stiffness="0.05750"/>
+          <geom name="B_j0_geom" class="finger_joint_geom" material="joint1_mat"
+                size="0.0075 0.005 0.001625" pos="0.0075 0 0"/>
+          <geom name="B_l0_geom" class="finger_link"
+                size="0.0125 0.005 0.006" pos="0.0275 0 0"/>
+          <geom name="B_l0_lip_a" class="finger_lip" pos="0.033 0 0.007" size="0.002"/>
+          <geom name="B_l0_lip_b" class="finger_lip" pos="0.033 0 -0.007" size="0.002"/>
+          <geom name="B_l0_lip_c" class="finger_lip" pos="0.0225 0 0.007" size="0.002"/>
+          <geom name="B_l0_lip_d" class="finger_lip" pos="0.0225 0 -0.007" size="0.002"/>
+        <body name="B_link1" pos="0.040 0 0">
+          <joint name="B_j1" class="finger_joint" axis="0 -1 0"
+                 stiffness="0.05750"/>
+          <geom name="B_j1_geom" class="finger_joint_geom" material="joint1_mat"
+                size="0.0075 0.005 0.001625" pos="0.0075 0 0"/>
+          <geom name="B_l1_geom" class="finger_link"
+                size="0.0125 0.005 0.006" pos="0.0275 0 0"/>
+          <geom name="B_l1_lip_a" class="finger_lip" pos="0.033 0 0.007" size="0.002"/>
+          <geom name="B_l1_lip_b" class="finger_lip" pos="0.033 0 -0.007" size="0.002"/>
+          <geom name="B_l1_lip_c" class="finger_lip" pos="0.0225 0 0.007" size="0.002"/>
+          <geom name="B_l1_lip_d" class="finger_lip" pos="0.0225 0 -0.007" size="0.002"/>
+          <site name="B_force1" pos="0.0275 0 0.012" size="0.008" rgba="1 0 0 0"/>
+          <body name="B_link2" pos="0.040 0 0">
+            <joint name="B_j2" class="finger_joint" axis="0 -1 0"
+                   stiffness="0.05750"/>
+            <geom name="B_j2_geom" class="finger_joint_geom" material="joint2_mat"
+                  size="0.0075 0.005 0.001625" pos="0.0075 0 0"/>
+            <geom name="B_l2_geom" class="finger_link"
+                  size="0.0125 0.005 0.006" pos="0.0275 0 0"/>
+            <geom name="B_l2_lip_a" class="finger_lip" pos="0.033 0 0.007" size="0.002"/>
+            <geom name="B_l2_lip_b" class="finger_lip" pos="0.033 0 -0.007" size="0.002"/>
+          <geom name="B_l2_lip_c" class="finger_lip" pos="0.0225 0 0.007" size="0.002"/>
+          <geom name="B_l2_lip_d" class="finger_lip" pos="0.0225 0 -0.007" size="0.002"/>
+            <site name="B_force2" pos="0.0275 0 0.012" size="0.008" rgba="1 0 0 0"/>
+            <body name="B_link3" pos="0.040 0 0">
+              <joint name="B_j3" class="finger_joint" axis="0 -1 0"
+                     stiffness="0.07182"/>
+              <geom name="B_j3_geom" class="finger_joint_geom" material="joint3_mat"
+                    size="0.0075 0.005 0.00175" pos="0.0075 0 0"/>
+              <geom name="B_l3_geom" class="finger_link"
+                    size="0.0125 0.005 0.006" pos="0.0275 0 0"/>
+              <geom name="B_l3_lip_a" class="finger_lip" pos="0.033 0 0.007" size="0.002"/>
+              <geom name="B_l3_lip_b" class="finger_lip" pos="0.033 0 -0.007" size="0.002"/>
+          <geom name="B_l3_lip_c" class="finger_lip" pos="0.0225 0 0.007" size="0.002"/>
+          <geom name="B_l3_lip_d" class="finger_lip" pos="0.0225 0 -0.007" size="0.002"/>
+              <site name="B_force3" pos="0.0275 0 0.012" size="0.008" rgba="1 0 0 0"/>
+              <site name="B_tip" pos="0.040 0 0" size="0.003" rgba="0.95 0.25 0.2 1"/>
+            </body>  <!-- /B_link3 -->
+          </body>    <!-- /B_link2 -->
+        </body>      <!-- /B_link1 -->
+        </body>      <!-- /B_link0 -->
+      </body>        <!-- /B_palm -->
+
+      <!-- == FINGER C  (opposing, X=0, extends +Y) == -->
+      <body name="C_palm" pos="0 -0.012 0" euler="0 0 1.5708">
+        <geom name="C_palm_geom" class="palm_link"
+              size="0.0125 0.005 0.0075" pos="0.0125 0 0"/>
+        <!-- link0: cable-driven proximal segment — NO flex sensor on hardware -->
+        <body name="C_link0" pos="0.025 0 0">
+          <joint name="C_j0" class="finger_joint" axis="0 -1 0"
+                 stiffness="0.05750"/>
+          <geom name="C_j0_geom" class="finger_joint_geom" material="joint1_mat"
+                size="0.0075 0.005 0.001625" pos="0.0075 0 0"/>
+          <geom name="C_l0_geom" class="finger_link"
+                size="0.0125 0.005 0.006" pos="0.0275 0 0"/>
+          <geom name="C_l0_lip_a" class="finger_lip" pos="0.033 0 0.007" size="0.002"/>
+          <geom name="C_l0_lip_b" class="finger_lip" pos="0.033 0 -0.007" size="0.002"/>
+          <geom name="C_l0_lip_c" class="finger_lip" pos="0.0225 0 0.007" size="0.002"/>
+          <geom name="C_l0_lip_d" class="finger_lip" pos="0.0225 0 -0.007" size="0.002"/>
+        <body name="C_link1" pos="0.040 0 0">
+          <joint name="C_j1" class="finger_joint" axis="0 -1 0"
+                 stiffness="0.05750"/>
+          <geom name="C_j1_geom" class="finger_joint_geom" material="joint1_mat"
+                size="0.0075 0.005 0.001625" pos="0.0075 0 0"/>
+          <geom name="C_l1_geom" class="finger_link"
+                size="0.0125 0.005 0.006" pos="0.0275 0 0"/>
+          <geom name="C_l1_lip_a" class="finger_lip" pos="0.033 0 0.007" size="0.002"/>
+          <geom name="C_l1_lip_b" class="finger_lip" pos="0.033 0 -0.007" size="0.002"/>
+          <geom name="C_l1_lip_c" class="finger_lip" pos="0.0225 0 0.007" size="0.002"/>
+          <geom name="C_l1_lip_d" class="finger_lip" pos="0.0225 0 -0.007" size="0.002"/>
+          <site name="C_force1" pos="0.0275 0 0.012" size="0.008" rgba="1 0 0 0"/>
+          <body name="C_link2" pos="0.040 0 0">
+            <joint name="C_j2" class="finger_joint" axis="0 -1 0"
+                   stiffness="0.05750"/>
+            <geom name="C_j2_geom" class="finger_joint_geom" material="joint2_mat"
+                  size="0.0075 0.005 0.001625" pos="0.0075 0 0"/>
+            <geom name="C_l2_geom" class="finger_link"
+                  size="0.0125 0.005 0.006" pos="0.0275 0 0"/>
+            <geom name="C_l2_lip_a" class="finger_lip" pos="0.033 0 0.007" size="0.002"/>
+            <geom name="C_l2_lip_b" class="finger_lip" pos="0.033 0 -0.007" size="0.002"/>
+          <geom name="C_l2_lip_c" class="finger_lip" pos="0.0225 0 0.007" size="0.002"/>
+          <geom name="C_l2_lip_d" class="finger_lip" pos="0.0225 0 -0.007" size="0.002"/>
+            <site name="C_force2" pos="0.0275 0 0.012" size="0.008" rgba="1 0 0 0"/>
+            <body name="C_link3" pos="0.040 0 0">
+              <joint name="C_j3" class="finger_joint" axis="0 -1 0"
+                     stiffness="0.07182"/>
+              <geom name="C_j3_geom" class="finger_joint_geom" material="joint3_mat"
+                    size="0.0075 0.005 0.00175" pos="0.0075 0 0"/>
+              <geom name="C_l3_geom" class="finger_link"
+                    size="0.0125 0.005 0.006" pos="0.0275 0 0"/>
+              <geom name="C_l3_lip_a" class="finger_lip" pos="0.033 0 0.007" size="0.002"/>
+              <geom name="C_l3_lip_b" class="finger_lip" pos="0.033 0 -0.007" size="0.002"/>
+          <geom name="C_l3_lip_c" class="finger_lip" pos="0.0225 0 0.007" size="0.002"/>
+          <geom name="C_l3_lip_d" class="finger_lip" pos="0.0225 0 -0.007" size="0.002"/>
+              <site name="C_force3" pos="0.0275 0 0.012" size="0.008" rgba="1 0 0 0"/>
+              <site name="C_tip" pos="0.040 0 0" size="0.003" rgba="0.95 0.25 0.2 1"/>
+            </body>  <!-- /C_link3 -->
+          </body>    <!-- /C_link2 -->
+        </body>      <!-- /C_link1 -->
+        </body>      <!-- /C_link0 -->
+      </body>        <!-- /C_palm -->
+
+    </body> <!-- /gripper_base -->
+
+    <!-- === GRASPABLE OBJECTS === -->
+
+    <!-- Paper towel roll — matches grip_objects.py (7 in Ø × 12 in long, 1/1.5 scale)
+         Effective: 4.67 in Ø × 8 in long  →  radius=59.3 mm, half-length=101.6 mm
+         Park: horizontal (axis=X), resting on floor at z = radius = 0.0593 m  -->
+    <body name="obj_paper_roll" pos="-0.18 0.22 0.0593" euler="0 1.5708 0">
+      <freejoint name="obj_paper_roll_jnt"/>
+      <geom name="obj_paper_roll_geom" type="cylinder"
+            size="0.0593 0.1016"
+            density="80" material="paper_towel_mat"
+            friction="1.2 0.5 0.01" contype="1" conaffinity="1"
+            condim="6" solref="0.020 1.0" solimp="0.85 0.95 0.004"
+            margin="0.001"/>
+    </body>
+
+
+    <!-- Sphere -->
+    <body name="obj_sphere" pos="-0.18 -0.22 0.016">
+      <freejoint name="obj_sphere_jnt"/>
+      <geom name="obj_sphere_geom" type="sphere" size="0.016"
+            density="800" material="object3_mat"
+            friction="1.2 0.5 0.01" contype="1" conaffinity="1"
+            condim="6" solref="0.005 1.0"/>
+    </body>
+
+    <!-- ═══════════════════════════════════════════════════
+         REAL GRIP OBJECTS — geometry from grip_objects.py
+         ═══════════════════════════════════════════════════ -->
+
+    <!-- Paint Tube — ALL offsets along Z_local (euler 0 1.5708 0 → axis=Z_local)
+         body r=17mm hl=55mm [−55,+55] | shoulder r=11mm [+55,+67] |
+         nozzle r=5mm [+67,+77] | cap r=7.5mm [+77,+87] | crimp box at z=−59
+    -->
+    <body name="obj_paint_tube" pos="0.0 0.22 0.017" euler="0 1.5708 0">
+      <freejoint name="obj_paint_tube_jnt"/>
+      <geom name="obj_pt_body" type="cylinder"
+            size="0.017 0.055"
+            density="900" material="paint_tube_mat"
+            friction="1.1 0.5 0.01" contype="1" conaffinity="1"
+            condim="6" solref="0.008 1.0" solimp="0.92 0.98 0.001"/>
+      <geom name="obj_pt_label" type="cylinder"
+            size="0.0173 0.022" pos="0 0 -0.005"
+            density="0" material="paint_tube_label_mat"
+            contype="0" conaffinity="0"/>
+      <!-- crimp/shoulder/nozzle/cap: visual-only — disabling collision on these
+           small adjacent geoms eliminates the multi-contact oscillation that
+           caused the tube to vibrate and eject from the grip.
+           Only the main body cylinder (obj_pt_body) needs physics contact. -->
+      <geom name="obj_pt_crimp" type="box"
+            size="0.0015 0.015 0.005" pos="0 0 -0.059"
+            density="1200" material="paint_tube_mat"
+            contype="0" conaffinity="0"/>
+      <geom name="obj_pt_shoulder" type="cylinder"
+            size="0.011 0.006" pos="0 0 0.061"
+            density="900" material="paint_tube_mat"
+            contype="0" conaffinity="0"/>
+      <geom name="obj_pt_nozzle" type="cylinder"
+            size="0.005 0.005" pos="0 0 0.072"
+            density="900" material="paint_tube_mat"
+            contype="0" conaffinity="0"/>
+      <geom name="obj_pt_cap" type="cylinder"
+            size="0.0075 0.005" pos="0 0 0.082"
+            density="900" material="paint_tube_cap_mat"
+            contype="0" conaffinity="0"/>
+    </body>
+
+    <!-- Screwdriver — ALL offsets along Z_local (euler 0 1.5708 0 → axis=Z_local)
+         handle r=12.7mm hl=25mm [−25,+25] | ferrule r=6mm [+25,+33] |
+         shaft r=1.5mm hl=31mm [+33,+95] | grip ridge visual-only at z=−5
+    -->
+    <body name="obj_screwdriver" pos="0.18 0.22 0.013" euler="0 1.5708 0">
+      <freejoint name="obj_screwdriver_jnt"/>
+      <geom name="obj_sd_handle" type="cylinder"
+            size="0.0127 0.025"
+            density="1100" material="screwdriver_handle_mat"
+            friction="1.8 0.8 0.01" contype="1" conaffinity="1"
+            condim="6" solref="0.008 1.0" solimp="0.92 0.98 0.001"/>
+      <geom name="obj_sd_grip" type="cylinder"
+            size="0.014 0.002" pos="0 0 -0.005"
+            density="0" material="screwdriver_handle_mat"
+            contype="0" conaffinity="0"/>
+      <geom name="obj_sd_ferrule" type="cylinder"
+            size="0.006 0.004" pos="0 0 0.029"
+            density="7800" material="screwdriver_shaft_mat"
+            friction="0.8 0.3 0.01" contype="1" conaffinity="1"
+            condim="6" solref="0.005 1.0"/>
+      <geom name="obj_sd_shaft" type="cylinder"
+            size="0.0015 0.031" pos="0 0 0.064"
+            density="7800" material="screwdriver_shaft_mat"
+            friction="0.8 0.3 0.01" contype="1" conaffinity="1"
+            condim="6" solref="0.005 1.0"/>
+    </body>
+
+    <!-- Tape Roll  (3.75 in OD × 3 in ID × 2 in thick)
+         outer_r = 47.6 mm,  inner_r = 38.1 mm,  thickness = 50.8 mm
+         MuJoCo cannot represent a true annulus; the outer cylinder is the
+         contact surface.  The inner core cylinder is purely visual (no collision).
+         Park: upright (hole axis = Z), z = half_thickness = 25.4 mm
+    -->
+    <body name="obj_tape_roll" pos="0.0 -0.22 0.0254">
+      <freejoint name="obj_tape_roll_jnt"/>
+      <!-- Outer tape surface (amber/yellow) -->
+      <geom name="obj_tr_outer" type="cylinder"
+            size="0.047625 0.0254"
+            density="600" material="tape_roll_mat"
+            friction="1.4 0.6 0.01" contype="1" conaffinity="1"
+            condim="6" solref="0.008 1.0" solimp="0.92 0.98 0.001"/>
+      <!-- Inner cardboard core (visual only — no collision) -->
+      <geom name="obj_tr_core" type="cylinder"
+            size="0.0381 0.0255"
+            density="0" material="tape_core_mat"
+            contype="0" conaffinity="0"/>
+    </body>
+
+  </worldbody>
+
+  <!-- === TENDONS === -->
+  <tendon>
+    <fixed name="tendon_A" limited="true" range="0 0.090">
+      <joint joint="A_j0" coef="0.0050"/>
+      <joint joint="A_j1" coef="0.0050"/>
+      <joint joint="A_j2" coef="0.0050"/>
+      <joint joint="A_j3" coef="0.0050"/>
+    </fixed>
+    <fixed name="tendon_B" limited="true" range="0 0.090">
+      <joint joint="B_j0" coef="0.0050"/>
+      <joint joint="B_j1" coef="0.0050"/>
+      <joint joint="B_j2" coef="0.0050"/>
+      <joint joint="B_j3" coef="0.0050"/>
+    </fixed>
+    <fixed name="tendon_C" limited="true" range="0 0.090">
+      <joint joint="C_j0" coef="0.0050"/>
+      <joint joint="C_j1" coef="0.0050"/>
+      <joint joint="C_j2" coef="0.0050"/>
+      <joint joint="C_j3" coef="0.0050"/>
+    </fixed>
+  </tendon>
+
+  <!-- === ACTUATORS  (tuned to match real ST3215 servo forces) === -->
+  <actuator>
+    <position name="act_A_pos" tendon="tendon_A"
+              kp="2000" kv="50"
+              ctrlrange="0 0.090" forcerange="-20 20"/>
+    <position name="act_B_pos" tendon="tendon_B"
+              kp="2000" kv="50"
+              ctrlrange="0 0.090" forcerange="-20 20"/>
+    <position name="act_C_pos" tendon="tendon_C"
+              kp="2000" kv="50"
+              ctrlrange="0 0.090" forcerange="-20 20"/>
+
+    <general name="act_A_frc" tendon="tendon_A"
+             gainprm="1 0 0" biasprm="0 0 0"
+             ctrlrange="-10 10" forcerange="-20 20"
+             dyntype="none"/>
+    <general name="act_B_frc" tendon="tendon_B"
+             gainprm="1 0 0" biasprm="0 0 0"
+             ctrlrange="-10 10" forcerange="-20 20"
+             dyntype="none"/>
+    <general name="act_C_frc" tendon="tendon_C"
+             gainprm="1 0 0" biasprm="0 0 0"
+             ctrlrange="-10 10" forcerange="-20 20"
+             dyntype="none"/>
+
+    <!-- Splay actuators: parallel fingers A & B rotate outward -->
+    <position name="act_A_splay" joint="A_splay"
+              kp="500" kv="20"
+              ctrlrange="0 0.5236" forcerange="-10 10"/>
+    <position name="act_B_splay" joint="B_splay"
+              kp="500" kv="20"
+              ctrlrange="0 0.5236" forcerange="-10 10"/>
+  </actuator>
+
+  <!-- === SENSORS === -->
+  <!-- j0 (palm joint): cable-driven but NOT instrumented with a flex sensor
+       on the physical prototype. Joint-position sensors added here so
+       the simulation can track palm deflection; forces at this segment
+       are flagged as "unmonitored" in the Python readout. -->
+  <sensor>
+    <jointpos name="A_j0_pos" joint="A_j0"/>
+    <jointpos name="A_j1_pos" joint="A_j1"/>
+    <jointpos name="A_j2_pos" joint="A_j2"/>
+    <jointpos name="A_j3_pos" joint="A_j3"/>
+    <jointpos name="B_j0_pos" joint="B_j0"/>
+    <jointpos name="B_j1_pos" joint="B_j1"/>
+    <jointpos name="B_j2_pos" joint="B_j2"/>
+    <jointpos name="B_j3_pos" joint="B_j3"/>
+    <jointpos name="C_j0_pos" joint="C_j0"/>
+    <jointpos name="C_j1_pos" joint="C_j1"/>
+    <jointpos name="C_j2_pos" joint="C_j2"/>
+    <jointpos name="C_j3_pos" joint="C_j3"/>
+    <tendonpos name="ten_A_len" tendon="tendon_A"/>
+    <tendonpos name="ten_B_len" tendon="tendon_B"/>
+    <tendonpos name="ten_C_len" tendon="tendon_C"/>
+    <touch name="A_touch1" site="A_force1"/>
+    <touch name="A_touch2" site="A_force2"/>
+    <touch name="A_touch3" site="A_force3"/>
+    <touch name="B_touch1" site="B_force1"/>
+    <touch name="B_touch2" site="B_force2"/>
+    <touch name="B_touch3" site="B_force3"/>
+    <touch name="C_touch1" site="C_force1"/>
+    <touch name="C_touch2" site="C_force2"/>
+    <touch name="C_touch3" site="C_force3"/>
+  </sensor>
+
+  <!-- Contact exclusions -->
+  <!-- Adjacent bodies (parent-child) -->
+  <contact>
+    <!-- A finger chain -->
+    <exclude body1="A_palm"  body2="A_link0"/>
+    <exclude body1="A_link0" body2="A_link1"/>
+    <exclude body1="A_link1" body2="A_link2"/>
+    <exclude body1="A_link2" body2="A_link3"/>
+    <!-- B finger chain -->
+    <exclude body1="B_palm"  body2="B_link0"/>
+    <exclude body1="B_link0" body2="B_link1"/>
+    <exclude body1="B_link1" body2="B_link2"/>
+    <exclude body1="B_link2" body2="B_link3"/>
+    <!-- C finger chain -->
+    <exclude body1="C_palm"  body2="C_link0"/>
+    <exclude body1="C_link0" body2="C_link1"/>
+    <exclude body1="C_link1" body2="C_link2"/>
+    <exclude body1="C_link2" body2="C_link3"/>
+    <!-- gripper_base ↔ proximal bodies -->
+    <exclude body1="gripper_base" body2="A_palm"/>
+    <exclude body1="gripper_base" body2="B_palm"/>
+    <exclude body1="gripper_base" body2="C_palm"/>
+    <exclude body1="gripper_base" body2="A_link0"/>
+    <exclude body1="gripper_base" body2="B_link0"/>
+    <exclude body1="gripper_base" body2="C_link0"/>
+    <exclude body1="gripper_base" body2="A_link1"/>
+    <exclude body1="gripper_base" body2="B_link1"/>
+    <exclude body1="gripper_base" body2="C_link1"/>
+    <!-- palm-to-palm (A/B are side-by-side) -->
+    <exclude body1="A_palm" body2="B_palm"/>
+    <exclude body1="A_palm" body2="C_palm"/>
+    <exclude body1="B_palm" body2="C_palm"/>
+    <!-- link0-to-link0 cross-finger (all three close at base) -->
+    <exclude body1="A_link0" body2="B_link0"/>
+    <exclude body1="A_link0" body2="C_link0"/>
+    <exclude body1="B_link0" body2="C_link0"/>
+  </contact>
+
+</mujoco>
