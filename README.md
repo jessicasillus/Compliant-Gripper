@@ -1,4 +1,4 @@
-# Compliant Gripper
+# Design, Simulation, and Manufacturing of a Tendon Driven Compliant Robotic Gripper With 3D Printed Force Sensing
 
 This repository contains all design, firmware, simulation, and data acquisition files for a tendon-driven, three-finger compliant robotic gripper with integrated capacitive force sensing, developed as part of a master's thesis at The Ohio State University. The gripper uses TPU fin-ray finger structures, pseudo-rigid body model (PRBM) kinematics, and is designed for integration with a UR5e robotic arm for space-relevant manipulation tasks.
 
