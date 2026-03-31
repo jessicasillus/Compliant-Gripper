@@ -130,4 +130,4 @@ This folder contains Python scripts for kinematic modeling and visualization of 
 
 ## License
 
-This project was developed as part of a master's thesis at The Ohio State University. Please contact the author before using or adapting any files for other purposes.
+This project was developed as part of a master's thesis at The Ohio State University. Feel free to use the files and adapt on this research! :) Email with any questions.
